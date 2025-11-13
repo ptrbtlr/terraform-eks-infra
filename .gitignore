@@ -3,3 +3,8 @@
 *.tfstate.*
 crash.log
 crash.*.log
+
+# Local/secret var files
+terraform.tfvars
+*.tfvars.local
+secrets.tfvars
