@@ -1,10 +1,9 @@
+# Terraform cache & state
 .terraform/
-*.tfstate
-*.tfstate.*
+terraform.tfstate
+terraform.tfstate.*
 crash.log
-crash.*.log
 
-# Local/secret var files
-terraform.tfvars
-*.tfvars.local
-secrets.tfvars
+# Local tfvars (keep secrets/config local)
+*.tfvars
+!terraform.tfvars.example
