@@ -5,6 +5,19 @@ variable "aws_region" {
   default     = "us-east-2"
 }
 
+variable "environment" {
+  type        = string
+  description = "Environment name (e.g. dev, stage, prod)"
+  default     = "dev"
+}
+
+variable "project_name" {
+  type        = string
+  description = "Project or application name"
+  default     = "eks-devops-platform"
+}
+
+
 # ===== VPC =====
 variable "vpc_name" {
   type        = string

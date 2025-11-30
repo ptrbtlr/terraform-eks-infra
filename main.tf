@@ -2,9 +2,6 @@
 # main.tf  (provider "aws" lives in provider.tf)
 ##############################################
 
-data "aws_partition" "current" {}
-data "aws_caller_identity" "current" {}
-
 # --- Discover AZs in the selected region
 data "aws_availability_zones" "available" {
   state = "available"
@@ -24,7 +21,15 @@ locals {
   public_subnets_effective = var.public_subnets != null ? var.public_subnets : [
     for i in range(2) : cidrsubnet(var.vpc_cidr, 8, 100 + i)
   ]
+
+  # 🔹 Common tags used everywhere
+  common_tags = {
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "terraform"
+  }
 }
+
 
 # -----------------------------
 # VPC (wrapper around official module)
@@ -48,11 +53,8 @@ module "vpc" {
     "kubernetes.io/cluster/${var.cluster_name}" = "shared"
   }
 
-  tags = {
-    Project     = "eks-devops-pipeline"
-    Environment = "dev"
-    ManagedBy   = "terraform"
-  }
+  tags = local.common_tags
+
 }
 
 # -----------------------------------
@@ -74,7 +76,7 @@ data "aws_iam_policy_document" "ng_trust" {
 resource "aws_iam_role" "nodegroup" {
   name               = "devops-eks-nodegroup"
   assume_role_policy = data.aws_iam_policy_document.ng_trust.json
-  tags               = { ManagedBy = "terraform" }
+  tags               = local.common_tags
 }
 
 resource "aws_iam_role_policy_attachment" "ng_worker" {
@@ -100,32 +102,16 @@ module "eks" {
 
   name               = var.cluster_name
   kubernetes_version = var.cluster_version
+  vpc_id             = module.vpc.vpc_id
+  subnet_ids         = module.vpc.private_subnets # keep nodes private behind NAT
 
-  vpc_id     = module.vpc.vpc_id
-  subnet_ids = module.vpc.private_subnets # keep nodes private behind NAT
-
-  node_instance_type = var.node_instance_type
-  node_min_size      = var.node_min_size
-  node_desired_size  = var.node_desired_size
-  node_max_size      = var.node_max_size
-
-  # Use pre-created node role
-  node_role_arn = aws_iam_role.nodegroup.arn
-
-  tags = {
-    Project     = "eks-devops-pipeline"
-    Environment = "dev"
-    ManagedBy   = "terraform"
-  }
+  tags = local.common_tags
 
   depends_on = [
     aws_iam_role_policy_attachment.ng_worker,
     aws_iam_role_policy_attachment.ng_ecr,
     aws_iam_role_policy_attachment.ng_ssm
   ]
-
-  partition  = data.aws_partition.current.partition
-  account_id = data.aws_caller_identity.current.account_id
 }
 
 # -----------------------------------
@@ -158,7 +144,7 @@ data "aws_iam_policy_document" "cni_trust" {
 resource "aws_iam_role" "cni_irsa" {
   name               = "devops-eks-cni-irsa"
   assume_role_policy = data.aws_iam_policy_document.cni_trust.json
-  tags               = { ManagedBy = "terraform" }
+  tags               = local.common_tags
 }
 
 resource "aws_iam_role_policy_attachment" "cni_irsa_attach" {
@@ -207,9 +193,12 @@ resource "aws_eks_node_group" "default" {
     max_unavailable = 1
   }
 
-  tags = {
-    ManagedBy = "terraform"
-  }
+  tags = merge(
+    local.common_tags,
+    {
+      "eks/nodegroup" = "default"
+    }
+  )
 
   # Ensure the cluster exists first (and the role + policies are attached)
   depends_on = [
